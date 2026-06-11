@@ -24,6 +24,7 @@ app.use(
         !origin ||
         origin === env.frontendUrl ||
         /^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin) ||
+        /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin) ||
         /^http:\/\/localhost:\d+$/.test(origin) ||
         /^http:\/\/127\.0\.0\.1:\d+$/.test(origin) ||
         /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) ||
