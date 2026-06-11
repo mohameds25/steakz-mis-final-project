@@ -10,8 +10,15 @@ export type SessionUser = {
 };
 
 const configuredApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+const productionApiUrl = "https://steakz-mis-final-project.onrender.com";
+const isLocalBrowser = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 const sameHostApiUrl = `${window.location.protocol}//${window.location.hostname}:4000`;
-const apiUrl = configuredApiUrl && !configuredApiUrl.includes("localhost") ? configuredApiUrl : sameHostApiUrl;
+const apiUrl =
+  configuredApiUrl && !configuredApiUrl.includes("localhost")
+    ? configuredApiUrl
+    : isLocalBrowser
+      ? sameHostApiUrl
+      : productionApiUrl;
 
 export async function login(email: string, password: string) {
   const response = await fetch(`${apiUrl}/api/auth/login`, {

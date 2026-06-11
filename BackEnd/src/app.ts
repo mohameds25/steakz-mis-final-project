@@ -12,6 +12,7 @@ import { reportRouter } from "./routes/reports";
 import { saleRouter } from "./routes/sales";
 import { shiftRouter } from "./routes/shifts";
 import { userRouter } from "./routes/users";
+import { env } from "./config/env";
 
 export const app = express();
 
@@ -21,6 +22,8 @@ app.use(
     origin(origin, callback) {
       const allowedDevOrigin =
         !origin ||
+        origin === env.frontendUrl ||
+        /^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin) ||
         /^http:\/\/localhost:\d+$/.test(origin) ||
         /^http:\/\/127\.0\.0\.1:\d+$/.test(origin) ||
         /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) ||
