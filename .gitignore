@@ -1,0 +1,31 @@
+node_modules/
+dist/
+.DS_Store
+.env.local
+*.log
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.production
+
+BackEnd/.env
+FrontEnd/.env
+
+# Dependencies
+node_modules/
+BackEnd/node_modules/
+FrontEnd/node_modules/
+
+# Build files
+dist/
+build/
+BackEnd/dist/
+FrontEnd/dist/
+
+# Logs
+*.log
+
+# Mac files
+.DS_Store

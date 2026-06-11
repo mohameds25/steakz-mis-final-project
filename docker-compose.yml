@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: steakz-postgres
+    environment:
+      POSTGRES_USER: steakz_user
+      POSTGRES_PASSWORD: steakz_password
+      POSTGRES_DB: steakz_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - steakz_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  steakz_postgres_data:
