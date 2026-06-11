@@ -27,7 +27,8 @@ export async function login(email: string, password: string) {
     body: JSON.stringify({ email, password })
   });
   if (!response.ok) {
-    throw new Error("Login failed");
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message || "Login failed");
   }
   return response.json() as Promise<{ token: string; user: SessionUser }>;
 }

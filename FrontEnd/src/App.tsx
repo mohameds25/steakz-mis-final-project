@@ -150,8 +150,8 @@ export function App() {
       localStorage.setItem("steakzPendingBranch", selectedPublicBranch.name);
       localStorage.setItem("steakzToken", session.token);
       localStorage.setItem("steakzUser", JSON.stringify(session.user));
-    } catch {
-      setError("Login failed. Check that the backend is running and type the password manually.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Login failed. Check your email and password.");
     }
   }
 
