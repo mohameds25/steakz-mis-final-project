@@ -12,32 +12,11 @@ import { reportRouter } from "./routes/reports";
 import { saleRouter } from "./routes/sales";
 import { shiftRouter } from "./routes/shifts";
 import { userRouter } from "./routes/users";
-import { env } from "./config/env";
 
 export const app = express();
 
 app.use(helmet());
-app.use(
-  cors({
-    origin(origin, callback) {
-      const allowedDevOrigin =
-        !origin ||
-        origin === env.frontendUrl ||
-        /^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin) ||
-        /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin) ||
-        /^http:\/\/localhost:\d+$/.test(origin) ||
-        /^http:\/\/127\.0\.0\.1:\d+$/.test(origin) ||
-        /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/.test(origin) ||
-        /^http:\/\/192\.168\.\d+\.\d+:\d+$/.test(origin) ||
-        /^http:\/\/172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+:\d+$/.test(origin);
-
-      if (allowedDevOrigin) {
-        return callback(null, true);
-      }
-      return callback(new Error("Not allowed by CORS"));
-    }
-  })
-);
+app.use(cors({ origin: true }));
 app.use(express.json());
 app.use(morgan("dev"));
 
