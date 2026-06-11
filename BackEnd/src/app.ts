@@ -1,5 +1,5 @@
 import cors from "cors";
-import express from "express";
+import express, { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import "./config/env";
@@ -53,4 +53,12 @@ app.use("/api/shifts", shiftRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Route not found" });
+});
+
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(error);
+  res.status(500).json({
+    message: "Internal server error",
+    detail: error instanceof Error ? error.message : "Unexpected server error"
+  });
 });
