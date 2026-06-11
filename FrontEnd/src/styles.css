@@ -700,6 +700,7 @@ button {
 
 .brand,
 .sidebar a,
+.sidebar button,
 .panel h2,
 .metric span {
   display: flex;
@@ -718,15 +719,27 @@ button {
   gap: 8px;
 }
 
-.sidebar a {
+.sidebar a,
+.sidebar button {
+  width: 100%;
+  border: 0;
   border-radius: 6px;
   padding: 10px;
   color: #f7f3ea;
+  background: transparent;
   text-decoration: none;
+  text-align: left;
 }
 
-.sidebar a:hover {
+.sidebar a:hover,
+.sidebar button:hover,
+.sidebar button.active {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar button.active {
+  color: #2b2418;
+  background: #f2c75c;
 }
 
 .workspace {
@@ -881,8 +894,16 @@ button {
   gap: 16px;
 }
 
-#performance {
+.content-grid > .panel,
+#reports {
   grid-column: 1 / -1;
+}
+
+.report-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
 }
 
 .mini-grid {
@@ -1257,7 +1278,8 @@ th {
   .menu-grid,
   .branch-grid,
   .branch-layout,
-  .home-info {
+  .home-info,
+  .report-summary {
     grid-template-columns: 1fr;
   }
 

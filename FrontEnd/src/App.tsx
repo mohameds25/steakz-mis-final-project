@@ -10,6 +10,8 @@ type Sale = { id: string; amount: string; paymentMethod: string; status: string;
 type Shift = { id: string; startsAt: string; endsAt: string; status: string; user: { name: string; role: string }; branch?: Branch };
 type UserRecord = { id: string; name: string; email: string; role: Role; branch?: Branch | null };
 type PublicTab = "home" | "book" | "menu" | "branches" | "login";
+type CustomerTab = "booking" | "menu" | "order" | "bookings" | "orders" | "branches";
+type StaffTab = "overview" | "reports" | "orders" | "reservations" | "sales" | "shifts" | "branches" | "users";
 type Cart = Record<string, number>;
 
 const roleLabels: Record<Role, string> = {
@@ -104,6 +106,8 @@ const roleProfiles: Record<Exclude<Role, "CUSTOMER">, { title: string; descripti
 
 export function App() {
   const [publicTab, setPublicTab] = useState<PublicTab>("home");
+  const [customerTab, setCustomerTab] = useState<CustomerTab>("booking");
+  const [staffTab, setStaffTab] = useState<StaffTab>("overview");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -489,6 +493,24 @@ export function App() {
 
   const staffRole = user?.role && user.role !== "CUSTOMER" ? user.role : undefined;
   const profile = staffRole ? roleProfiles[staffRole] : undefined;
+  const customerTabs: Array<{ id: CustomerTab; label: string; icon: React.ReactNode }> = [
+    { id: "booking", label: "Book Table", icon: <CalendarDays size={18} /> },
+    { id: "menu", label: "Menu", icon: <Utensils size={18} /> },
+    { id: "order", label: "Order", icon: <ShoppingBag size={18} /> },
+    { id: "bookings", label: "My Bookings", icon: <CalendarClock size={18} /> },
+    { id: "orders", label: "My Orders", icon: <ClipboardList size={18} /> },
+    { id: "branches", label: "Branches", icon: <Building2 size={18} /> }
+  ];
+  const staffTabs: Array<{ id: StaffTab; label: string; icon: React.ReactNode; visible?: boolean }> = [
+    { id: "overview", label: "Overview", icon: <BarChart3 size={18} /> },
+    { id: "reports", label: "Reports", icon: <BarChart3 size={18} />, visible: user?.role === "ADMIN" || user?.role === "HEADQUARTER_MANAGER" },
+    { id: "orders", label: "Orders", icon: <ClipboardList size={18} /> },
+    { id: "reservations", label: "Reservations", icon: <CalendarDays size={18} />, visible: canSeeBookings(user?.role) },
+    { id: "sales", label: "Sales", icon: <BarChart3 size={18} />, visible: canSeeSales(user?.role) },
+    { id: "shifts", label: "Shifts", icon: <CalendarClock size={18} />, visible: canSeeShifts(user?.role) },
+    { id: "branches", label: "Branches", icon: <Building2 size={18} /> },
+    { id: "users", label: "Users", icon: <Users size={18} />, visible: canSeeUsers(user?.role) }
+  ];
 
   if (!user) {
     return (
@@ -733,12 +755,16 @@ export function App() {
         <aside className="sidebar">
           <div className="brand"><Shield size={22} /> Steakz</div>
           <nav>
-            <a href="#menu"><Utensils size={18} /> Menu</a>
-            <a href="#booking"><CalendarDays size={18} /> Book Table</a>
-            <a href="#order"><ShoppingBag size={18} /> Order</a>
-            <a href="#bookings"><CalendarClock size={18} /> My Bookings</a>
-            <a href="#orders"><ClipboardList size={18} /> My Orders</a>
-            <a href="#branches"><Building2 size={18} /> Branches</a>
+            {customerTabs.map((tab) => (
+              <button
+                className={customerTab === tab.id ? "active" : ""}
+                key={tab.id}
+                type="button"
+                onClick={() => setCustomerTab(tab.id)}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            ))}
           </nav>
         </aside>
         <section className="workspace">
@@ -784,7 +810,7 @@ export function App() {
           </section>
 
           <section className="content-grid customer-grid">
-            <Panel id="menu" title="Step 2 - Select Dishes" icon={<Utensils />}>
+            {customerTab === "menu" && <Panel id="menu" title="Step 2 - Select Dishes" icon={<Utensils />}>
               <div className="customer-menu">
                 {menuHighlights.map((item) => (
                   <article
@@ -806,9 +832,9 @@ export function App() {
                   </article>
                 ))}
               </div>
-            </Panel>
+            </Panel>}
 
-            <Panel id="booking" title="Step 1 - Book a Table" icon={<CalendarDays />}>
+            {customerTab === "booking" && <Panel id="booking" title="Step 1 - Book a Table" icon={<CalendarDays />}>
               <form className="order-form" onSubmit={handleCustomerReservation}>
                 <label>
                   Branch
@@ -832,9 +858,9 @@ export function App() {
                 </label>
                 <button type="submit">Save table request</button>
               </form>
-            </Panel>
+            </Panel>}
 
-            <Panel id="order" title="Step 3 - Place Order" icon={<ShoppingBag />}>
+            {customerTab === "order" && <Panel id="order" title="Step 3 - Place Order" icon={<ShoppingBag />}>
               <form className="order-form" onSubmit={handleCustomerOrder}>
                 {!customerCanOrder && <p className="stage-note">Book a table first to unlock order placement.</p>}
                 <label>
@@ -864,8 +890,8 @@ export function App() {
                 </div>
                 <button type="submit" disabled={!data.branches.length || cartItems.length === 0 || !customerCanOrder}>Place order</button>
               </form>
-            </Panel>
-            <Panel id="bookings" title="My Bookings" icon={<CalendarClock />}>
+            </Panel>}
+            {customerTab === "bookings" && <Panel id="bookings" title="My Bookings" icon={<CalendarClock />}>
               <Table
                 rows={data.bookings.map((booking) => ({
                   branch: booking.branch?.name,
@@ -875,13 +901,13 @@ export function App() {
                 }))}
                 columns={["branch", "date", "guests", "status"]}
               />
-            </Panel>
-            <Panel id="orders" title="My Orders" icon={<ClipboardList />}>
+            </Panel>}
+            {customerTab === "orders" && <Panel id="orders" title="My Orders" icon={<ClipboardList />}>
               <Table rows={data.orders.map((order) => ({ branch: order.branch?.name, items: formatOrderItems(order), status: order.status, total: order.total }))} columns={["branch", "items", "status", "total"]} />
-            </Panel>
-            <Panel id="branches" title="Branches" icon={<Building2 />}>
+            </Panel>}
+            {customerTab === "branches" && <Panel id="branches" title="Branches" icon={<Building2 />}>
               <Table rows={data.branches} columns={["name", "city"]} />
-            </Panel>
+            </Panel>}
           </section>
         </section>
       </main>
@@ -893,13 +919,18 @@ export function App() {
       <aside className="sidebar">
         <div className="brand"><Shield size={22} /> Steakz</div>
         <nav>
-          <a href="#overview"><BarChart3 size={18} /> Overview</a>
-          <a href="#orders"><ClipboardList size={18} /> Orders</a>
-          {canSeeBookings(user.role) && <a href="#reservations"><CalendarDays size={18} /> Reservations</a>}
-          {canSeeSales(user.role) && <a href="#sales"><BarChart3 size={18} /> Sales</a>}
-          {canSeeShifts(user.role) && <a href="#shifts"><CalendarClock size={18} /> Shifts</a>}
-          <a href="#branches"><Building2 size={18} /> Branches</a>
-          {canSeeUsers(user.role) && <a href="#users"><Users size={18} /> Users</a>}
+          {staffTabs
+            .filter((tab) => tab.visible !== false)
+            .map((tab) => (
+              <button
+                className={staffTab === tab.id ? "active" : ""}
+                key={tab.id}
+                type="button"
+                onClick={() => setStaffTab(tab.id)}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            ))}
         </nav>
       </aside>
 
@@ -925,7 +956,7 @@ export function App() {
 
         {error && <p className="notice">{error}</p>}
 
-        {profile && (
+        {staffTab === "overview" && profile && (
           <section className="operations-hero">
             <div>
               <p className="eyebrow">{roleLabels[user.role]}</p>
@@ -942,20 +973,28 @@ export function App() {
           </section>
         )}
 
-        <section id="overview" className="metrics">
-          <Metric label="Branches" value={data.branches.length} icon={<Building2 />} />
-          <Metric label="Total Orders" value={data.orders.length} icon={<ClipboardList />} />
-          {canSeeBookings(user.role) && <Metric label="Reservations" value={data.bookings.length} icon={<CalendarDays />} />}
-          {canSeeSales(user.role) && <Metric label="Revenue" value={`£${totals.revenue.toFixed(2)}`} icon={<BarChart3 />} />}
-          {canSeeUsers(user.role) && <Metric label="Customers" value={totals.customers} icon={<Users />} />}
-          {canSeeUsers(user.role) && <Metric label="Users" value={data.users.length} icon={<Users />} />}
-          <Metric label="Menu Items" value={menuHighlights.length} icon={<Utensils />} />
-          {canSeeShifts(user.role) && <Metric label="Shifts" value={data.shifts.length} icon={<CalendarClock />} />}
-        </section>
+        {staffTab === "overview" && (
+          <section id="overview" className="metrics">
+            <Metric label="Branches" value={data.branches.length} icon={<Building2 />} />
+            <Metric label="Total Orders" value={data.orders.length} icon={<ClipboardList />} />
+            {canSeeBookings(user.role) && <Metric label="Reservations" value={data.bookings.length} icon={<CalendarDays />} />}
+            {canSeeSales(user.role) && <Metric label="Revenue" value={`£${totals.revenue.toFixed(2)}`} icon={<BarChart3 />} />}
+            {canSeeUsers(user.role) && <Metric label="Customers" value={totals.customers} icon={<Users />} />}
+            {canSeeUsers(user.role) && <Metric label="Users" value={data.users.length} icon={<Users />} />}
+            <Metric label="Menu Items" value={menuHighlights.length} icon={<Utensils />} />
+            {canSeeShifts(user.role) && <Metric label="Shifts" value={data.shifts.length} icon={<CalendarClock />} />}
+          </section>
+        )}
 
         <section className="content-grid">
-          {(user.role === "ADMIN" || user.role === "HEADQUARTER_MANAGER") && (
-            <Panel id="performance" title="Live Performance" icon={<BarChart3 />}>
+          {staffTab === "reports" && (user.role === "ADMIN" || user.role === "HEADQUARTER_MANAGER") && (
+            <Panel id="reports" title="Headquarters Reports" icon={<BarChart3 />}>
+              <section className="report-summary">
+                <Metric label="Branches" value={data.branches.length} icon={<Building2 />} />
+                <Metric label="Orders" value={data.orders.length} icon={<ClipboardList />} />
+                <Metric label="Reservations" value={data.bookings.length} icon={<CalendarDays />} />
+                <Metric label="Revenue" value={`£${totals.revenue.toFixed(2)}`} icon={<BarChart3 />} />
+              </section>
               <div className="mini-grid">
                 <div>
                   <h3>Branch revenue</h3>
@@ -968,7 +1007,7 @@ export function App() {
               </div>
             </Panel>
           )}
-          <Panel id="orders" title="Orders" icon={<ClipboardList />}>
+          {staffTab === "orders" && <Panel id="orders" title="Orders" icon={<ClipboardList />}>
             {user.role !== "CHEF" && (
               <form className="branch-admin-form" onSubmit={handleStaffOrder}>
                 <input
@@ -1061,8 +1100,8 @@ export function App() {
                 }))}
               />
             )}
-          </Panel>
-          {canSeeBookings(user.role) && (
+          </Panel>}
+          {staffTab === "reservations" && canSeeBookings(user.role) && (
             <Panel id="reservations" title="Reservations" icon={<CalendarDays />}>
               {user.role === "WAITER" ? (
                 <ActionList
@@ -1096,17 +1135,17 @@ export function App() {
               )}
             </Panel>
           )}
-          {canSeeSales(user.role) && (
+          {staffTab === "sales" && canSeeSales(user.role) && (
             <Panel id="sales" title="Sales" icon={<BarChart3 />}>
               <Table rows={data.sales.slice(0, 8).map((sale) => ({ branch: sale.branch?.name, method: sale.paymentMethod, status: sale.status, amount: sale.amount }))} columns={["branch", "method", "status", "amount"]} />
             </Panel>
           )}
-          {canSeeShifts(user.role) && (
+          {staffTab === "shifts" && canSeeShifts(user.role) && (
             <Panel id="shifts" title="Shifts" icon={<CalendarClock />}>
               <Table rows={data.shifts.map((shift) => ({ employee: shift.user.name, role: shift.user.role, branch: shift.branch?.name, status: shift.status }))} columns={["employee", "role", "branch", "status"]} />
             </Panel>
           )}
-          <Panel id="branches" title="Branches" icon={<Building2 />}>
+          {staffTab === "branches" && <Panel id="branches" title="Branches" icon={<Building2 />}>
             {user.role === "HEADQUARTER_MANAGER" && (
               <form className="branch-admin-form" onSubmit={handleCreateBranch}>
                 <input
@@ -1149,8 +1188,8 @@ export function App() {
             ) : (
               <Table rows={data.branches} columns={["name", "city"]} />
             )}
-          </Panel>
-          {canSeeUsers(user.role) && (
+          </Panel>}
+          {staffTab === "users" && canSeeUsers(user.role) && (
             <Panel id="users" title="Users & Roles" icon={<Users />}>
               {(user.role === "BRANCH_MANAGER" || user.role === "HEADQUARTER_MANAGER") && (
                 <form className="branch-admin-form" onSubmit={handleCreateStaff}>
