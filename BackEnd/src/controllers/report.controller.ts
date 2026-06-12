@@ -37,7 +37,8 @@ export async function branchReport(req: Request, res: Response) {
     where: where ? { id: where.branchId } : undefined,
     include: {
       _count: { select: { orders: true, bookings: true, users: true, inventory: true } },
-      sales: true
+      sales: true,
+      users: { select: { name: true, email: true, role: true } }
     },
     orderBy: { name: "asc" }
   });
@@ -45,9 +46,11 @@ export async function branchReport(req: Request, res: Response) {
   res.json(branches.map((branch) => ({
     branch: branch.name,
     city: branch.city,
+    status: branch.status,
+    manager: branch.users.find((user) => user.role === "BRANCH_MANAGER")?.name ?? "Unassigned",
     orders: branch._count.orders,
     bookings: branch._count.bookings,
-    users: branch._count.users,
+    staff: branch.users.filter((user) => user.role !== "CUSTOMER").length,
     inventoryItems: branch._count.inventory,
     revenue: branch.sales.reduce((sum, sale) => sum + Number(sale.amount), 0)
   })));

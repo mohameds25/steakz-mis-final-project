@@ -48,6 +48,7 @@ model Branch {
   city        String
   address     String
   phone       String
+  status      String          @default("ACTIVE")
   createdAt   DateTime        @default(now())
   users       User[]
   inventory   InventoryItem[]

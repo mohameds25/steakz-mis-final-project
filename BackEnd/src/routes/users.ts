@@ -10,5 +10,5 @@ userRouter.use(authenticate);
 
 userRouter.get("/", requireRoles(Role.ADMIN, Role.HEADQUARTER_MANAGER, Role.BRANCH_MANAGER), asyncHandler(listUsers));
 userRouter.post("/", requireRoles(Role.ADMIN, Role.HEADQUARTER_MANAGER, Role.BRANCH_MANAGER), asyncHandler(createUser));
-userRouter.put("/:id", requireRoles(Role.ADMIN), asyncHandler(updateUser));
-userRouter.delete("/:id", requireRoles(Role.ADMIN), asyncHandler(deleteUser));
+userRouter.put("/:id", requireRoles(Role.ADMIN, Role.HEADQUARTER_MANAGER, Role.BRANCH_MANAGER), asyncHandler(updateUser));
+userRouter.delete("/:id", requireRoles(Role.ADMIN, Role.HEADQUARTER_MANAGER, Role.BRANCH_MANAGER), asyncHandler(deleteUser));

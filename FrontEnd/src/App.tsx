@@ -1,14 +1,33 @@
-import { BarChart3, Building2, CalendarClock, CalendarDays, ClipboardList, LogOut, MapPin, Shield, ShoppingBag, Utensils, Users } from "lucide-react";
+import { BarChart3, Building2, CalendarClock, CalendarDays, ClipboardList, Edit3, Eye, Filter, LogOut, MapPin, Search, Shield, ShoppingBag, Trash2, UserPlus, Utensils, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { deleteResource, getResource, login, postResource, putResource, registerCustomer, Role, SessionUser } from "./lib/api";
 
-type Branch = { id: string; name: string; city: string; address?: string; phone?: string };
+type BranchStatus = "ACTIVE" | "INACTIVE";
+type Branch = {
+  id: string;
+  name: string;
+  city: string;
+  address?: string;
+  phone?: string;
+  status?: BranchStatus;
+  manager?: Pick<UserRecord, "id" | "name" | "email" | "role" | "branchId"> | null;
+  staffCount?: number;
+  totalOrders?: number;
+  totalReservations?: number;
+  revenue?: number;
+};
 type OrderItem = { id?: string; name: string; quantity: number; unitPrice?: string; lineTotal?: string };
 type Order = { id: string; tableNumber?: number; customerName?: string; status: string; total: string; createdAt?: string; updatedAt?: string; branch?: Branch; items?: OrderItem[] };
 type TableBooking = { id: string; customerName?: string; reservationAt: string; guests: number; notes?: string; status: string; branch?: Branch };
 type Sale = { id: string; amount: string; paymentMethod: string; status: string; branch?: Branch };
 type Shift = { id: string; startsAt: string; endsAt: string; status: string; user: { name: string; role: string }; branch?: Branch };
-type UserRecord = { id: string; name: string; email: string; role: Role; branch?: Branch | null };
+type UserRecord = { id: string; name: string; email: string; role: Role; branchId?: string | null; branch?: Branch | null };
+type BranchDetails = Branch & {
+  users: UserRecord[];
+  orders: Order[];
+  bookings: TableBooking[];
+  sales: Sale[];
+};
 type PublicTab = "home" | "book" | "menu" | "branches" | "login";
 type CustomerTab = "booking" | "menu" | "order" | "bookings" | "orders" | "branches";
 type StaffTab = "overview" | "reports" | "orders" | "reservations" | "sales" | "shifts" | "branches" | "users";
@@ -119,8 +138,15 @@ export function App() {
   const [reservationDate, setReservationDate] = useState(defaultBookingDate);
   const [reservationTime, setReservationTime] = useState("19:00");
   const [reservationGuests, setReservationGuests] = useState(2);
-  const [branchDraft, setBranchDraft] = useState({ name: "", city: "", address: "", phone: "" });
+  const [branchDraft, setBranchDraft] = useState({ name: "", city: "", address: "", phone: "", status: "ACTIVE" as BranchStatus });
+  const [editingBranchId, setEditingBranchId] = useState("");
+  const [branchSearch, setBranchSearch] = useState("");
+  const [branchStatusFilter, setBranchStatusFilter] = useState<"ALL" | BranchStatus>("ALL");
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [selectedBranchDetails, setSelectedBranchDetails] = useState<BranchDetails | null>(null);
+  const [managerAssignment, setManagerAssignment] = useState("");
   const [staffDraft, setStaffDraft] = useState({ name: "", email: "", password: "123456", role: "WAITER" as Role, branchId: "" });
+  const [editingUserId, setEditingUserId] = useState("");
   const [staffOrderDraft, setStaffOrderDraft] = useState({ customerName: "", branchId: "", menuItem: menuHighlights[0].name, quantity: 1, status: "NEW" });
   const [token, setToken] = useState(localStorage.getItem("steakzToken") || "");
   const [user, setUser] = useState<SessionUser | null>(() => {
@@ -340,37 +366,180 @@ export function App() {
         canSeeUsers(user?.role) ? getResource<UserRecord[]>("/api/users", token) : Promise.resolve(data.users)
       ]);
       setData((current) => ({ ...current, branches, users }));
-      setBranchDraft({ name: "", city: "", address: "", phone: "" });
+      setBranchDraft({ name: "", city: "", address: "", phone: "", status: "ACTIVE" });
       setError("New branch added with default staff accounts.");
     } catch {
       setError("Could not add the branch. Fill all branch details.");
     }
   }
 
-  async function handleDeleteBranch(branchId: string) {
-    if (!token) return;
+  async function handleUpdateBranch(event: React.FormEvent) {
+    event.preventDefault();
+    if (!token || !editingBranchId) return;
+    const savedBranchId = editingBranchId;
     try {
-      await deleteResource(`/api/branches/${branchId}`, token);
-      const branches = await getResource<Branch[]>("/api/branches", token);
-      setData((current) => ({ ...current, branches }));
-      setError("Branch deleted.");
-    } catch {
-      setError("Could not delete this branch. It may still have linked records.");
+      await putResource<Branch>(`/api/branches/${savedBranchId}`, token, branchDraft);
+      const [branches, orders, bookings, sales, users] = await Promise.all([
+        getResource<Branch[]>("/api/branches", token),
+        getResource<Order[]>("/api/orders", token),
+        canSeeBookings(user?.role) ? getResource<TableBooking[]>("/api/bookings", token) : Promise.resolve(data.bookings),
+        canSeeSales(user?.role) ? getResource<Sale[]>("/api/sales", token) : Promise.resolve(data.sales),
+        canSeeUsers(user?.role) ? getResource<UserRecord[]>("/api/users", token) : Promise.resolve(data.users)
+      ]);
+      setData((current) => ({ ...current, branches, orders, bookings, sales, users }));
+      setEditingBranchId("");
+      setBranchDraft({ name: "", city: "", address: "", phone: "", status: "ACTIVE" });
+      await loadBranchDetails(savedBranchId);
+      setError(`${branchDraft.name} updated successfully.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update the branch. Check the details and your role access.");
     }
   }
 
-  async function handleCreateStaff(event: React.FormEvent) {
+  async function startEditBranch(branch: Branch) {
+    setError(`Editing ${branch.name}. Update the form below and press Save Branch.`);
+    setEditingBranchId(branch.id);
+    setBranchDraft({
+      name: branch.name,
+      city: branch.city,
+      address: branch.address ?? "",
+      phone: branch.phone ?? "",
+      status: branch.status ?? "ACTIVE"
+    });
+    await loadBranchDetails(branch.id);
+    setTimeout(() => document.getElementById("branch-form")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+  }
+
+  function cancelEditBranch() {
+    setEditingBranchId("");
+    setBranchDraft({ name: "", city: "", address: "", phone: "", status: "ACTIVE" });
+  }
+
+  async function handleDeleteBranch(branchId: string) {
+    if (!token) return;
+    const branch = data.branches.find((item) => item.id === branchId);
+    const confirmed = window.confirm(`Delete ${branch?.name ?? "this branch"}? This will remove linked branch records.`);
+    if (!confirmed) return;
+    try {
+      await deleteResource(`/api/branches/${branchId}`, token);
+      const [branches, users, orders, bookings, sales, shifts] = await Promise.all([
+        getResource<Branch[]>("/api/branches", token),
+        canSeeUsers(user?.role) ? getResource<UserRecord[]>("/api/users", token) : Promise.resolve(data.users),
+        getResource<Order[]>("/api/orders", token),
+        canSeeBookings(user?.role) ? getResource<TableBooking[]>("/api/bookings", token) : Promise.resolve(data.bookings),
+        canSeeSales(user?.role) ? getResource<Sale[]>("/api/sales", token) : Promise.resolve(data.sales),
+        canSeeShifts(user?.role) ? getResource<Shift[]>("/api/shifts", token) : Promise.resolve(data.shifts)
+      ]);
+      setData((current) => ({ ...current, branches, users, orders, bookings, sales, shifts }));
+      if (selectedBranchId === branchId) {
+        setSelectedBranchId("");
+        setSelectedBranchDetails(null);
+      }
+      setError(`${branch?.name ?? "Branch"} deleted with its staff accounts.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not delete this branch. It may still have linked records.");
+    }
+  }
+
+  async function loadBranchDetails(branchId: string) {
+    if (!token) return;
+    try {
+      const details = await getResource<BranchDetails>(`/api/branches/${branchId}/details`, token);
+      setSelectedBranchId(branchId);
+      setSelectedBranchDetails(details);
+      setManagerAssignment(details.manager?.id ?? "");
+    } catch {
+      setError("Could not open branch details for this role.");
+    }
+  }
+
+  async function handleAssignManager(branchId: string) {
+    if (!token || !managerAssignment) return;
+    try {
+      await putResource<UserRecord>(`/api/branches/${branchId}/manager`, token, { managerId: managerAssignment });
+      const [branches, users] = await Promise.all([
+        getResource<Branch[]>("/api/branches", token),
+        canSeeUsers(user?.role) ? getResource<UserRecord[]>("/api/users", token) : Promise.resolve(data.users)
+      ]);
+      setData((current) => ({ ...current, branches, users }));
+      await loadBranchDetails(branchId);
+      setError("Branch manager assigned.");
+    } catch {
+      setError("Could not assign this manager.");
+    }
+  }
+
+  function resetStaffDraft(keepBranchId = false) {
+    setEditingUserId("");
+    setStaffDraft({
+      name: "",
+      email: "",
+      password: "123456",
+      role: user?.role === "BRANCH_MANAGER" ? "WAITER" : "WAITER",
+      branchId: keepBranchId ? staffDraft.branchId : ""
+    });
+  }
+
+  function startEditUser(account: UserRecord) {
+    setEditingUserId(account.id);
+    setStaffDraft({
+      name: account.name,
+      email: account.email,
+      password: "",
+      role: account.role,
+      branchId: account.branchId ?? account.branch?.id ?? ""
+    });
+    window.location.hash = "users";
+  }
+
+  async function refreshUsersAndBranches() {
+    if (!token) return;
+    const [users, branches] = await Promise.all([
+      canSeeUsers(user?.role) ? getResource<UserRecord[]>("/api/users", token) : Promise.resolve(data.users),
+      getResource<Branch[]>("/api/branches", token)
+    ]);
+    setData((current) => ({ ...current, users, branches }));
+    if (selectedBranchId) {
+      await loadBranchDetails(selectedBranchId);
+    }
+  }
+
+  async function handleSaveStaff(event: React.FormEvent) {
     event.preventDefault();
     if (!token || !user) return;
     const branchId = user.role === "BRANCH_MANAGER" ? user.branchId : staffDraft.branchId;
     try {
-      await postResource<UserRecord>("/api/users", token, { ...staffDraft, branchId });
-      const users = await getResource<UserRecord[]>("/api/users", token);
-      setData((current) => ({ ...current, users }));
-      setStaffDraft({ name: "", email: "", password: "123456", role: "WAITER", branchId: user.role === "HEADQUARTER_MANAGER" ? staffDraft.branchId : "" });
-      setError("Staff account created.");
-    } catch {
-      setError("Could not create staff account. Check email, role, and branch.");
+      const payload = {
+        name: staffDraft.name,
+        email: staffDraft.email,
+        role: staffDraft.role,
+        branchId: branchId || null,
+        ...(staffDraft.password ? { password: staffDraft.password } : {})
+      };
+      if (editingUserId) {
+        await putResource<UserRecord>(`/api/users/${editingUserId}`, token, payload);
+      } else {
+        await postResource<UserRecord>("/api/users", token, { ...payload, password: staffDraft.password || "123456" });
+      }
+      await refreshUsersAndBranches();
+      resetStaffDraft(user.role === "HEADQUARTER_MANAGER");
+      setError(editingUserId ? "User account updated." : "User account created.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not save user account. Check email, role, and branch.");
+    }
+  }
+
+  async function handleDeleteUser(userId: string, name: string) {
+    if (!token || !window.confirm(`Delete ${name}? This removes their login access.`)) return;
+    try {
+      await deleteResource(`/api/users/${userId}`, token);
+      await refreshUsersAndBranches();
+      if (editingUserId === userId) {
+        resetStaffDraft();
+      }
+      setError("User account deleted.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not delete this user.");
     }
   }
 
@@ -467,6 +636,14 @@ export function App() {
     setOrderBranchId(matchedBranch.id);
   }, [data.branches, orderBranchId, selectedPublicBranch.name, user?.role]);
 
+  useEffect(() => {
+    if (!user || user.role === "CUSTOMER" || staffTab !== "branches" || selectedBranchId || data.branches.length === 0) return;
+    const defaultBranch = user.branchId ? data.branches.find((branch) => branch.id === user.branchId) : data.branches[0];
+    if (defaultBranch) {
+      loadBranchDetails(defaultBranch.id);
+    }
+  }, [data.branches, selectedBranchId, staffTab, user?.branchId, user?.role]);
+
   const totals = useMemo(() => {
     const revenue = data.sales.reduce((sum, sale) => sum + Number(sale.amount), 0);
     const customers = data.users.filter((account) => account.role === "CUSTOMER").length;
@@ -493,6 +670,15 @@ export function App() {
 
   const staffRole = user?.role && user.role !== "CUSTOMER" ? user.role : undefined;
   const profile = staffRole ? roleProfiles[staffRole] : undefined;
+  const canManageBranchAdmin = user?.role === "ADMIN" || user?.role === "HEADQUARTER_MANAGER" || user?.role === "BRANCH_MANAGER";
+  const canControlAllBranches = user?.role === "ADMIN" || user?.role === "HEADQUARTER_MANAGER";
+  const branchManagers = data.users.filter((account) => account.role === "BRANCH_MANAGER");
+  const filteredBranches = data.branches.filter((branch) => {
+    const haystack = `${branch.name} ${branch.city} ${branch.manager?.name ?? ""}`.toLowerCase();
+    const matchesSearch = haystack.includes(branchSearch.toLowerCase());
+    const matchesStatus = branchStatusFilter === "ALL" || (branch.status ?? "ACTIVE") === branchStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
   const customerTabs: Array<{ id: CustomerTab; label: string; icon: React.ReactNode }> = [
     { id: "booking", label: "Book Table", icon: <CalendarDays size={18} /> },
     { id: "menu", label: "Menu", icon: <Utensils size={18} /> },
@@ -508,7 +694,7 @@ export function App() {
     { id: "reservations", label: "Reservations", icon: <CalendarDays size={18} />, visible: canSeeBookings(user?.role) },
     { id: "sales", label: "Sales", icon: <BarChart3 size={18} />, visible: canSeeSales(user?.role) },
     { id: "shifts", label: "Shifts", icon: <CalendarClock size={18} />, visible: canSeeShifts(user?.role) },
-    { id: "branches", label: "Branches", icon: <Building2 size={18} /> },
+    { id: "branches", label: "Branches", icon: <Building2 size={18} />, visible: canManageBranchAdmin },
     { id: "users", label: "Users", icon: <Users size={18} />, visible: canSeeUsers(user?.role) }
   ];
 
@@ -1145,98 +1331,298 @@ export function App() {
               <Table rows={data.shifts.map((shift) => ({ employee: shift.user.name, role: shift.user.role, branch: shift.branch?.name, status: shift.status }))} columns={["employee", "role", "branch", "status"]} />
             </Panel>
           )}
-          {staffTab === "branches" && <Panel id="branches" title="Branches" icon={<Building2 />}>
-            {user.role === "HEADQUARTER_MANAGER" && (
-              <form className="branch-admin-form" onSubmit={handleCreateBranch}>
-                <input
-                  aria-label="Branch name"
-                  placeholder="Branch name"
-                  value={branchDraft.name}
-                  onChange={(event) => setBranchDraft((current) => ({ ...current, name: event.target.value }))}
-                />
-                <input
-                  aria-label="City"
-                  placeholder="City"
-                  value={branchDraft.city}
-                  onChange={(event) => setBranchDraft((current) => ({ ...current, city: event.target.value }))}
-                />
-                <input
-                  aria-label="Address"
-                  placeholder="Address"
-                  value={branchDraft.address}
-                  onChange={(event) => setBranchDraft((current) => ({ ...current, address: event.target.value }))}
-                />
-                <input
-                  aria-label="Phone"
-                  placeholder="Phone"
-                  value={branchDraft.phone}
-                  onChange={(event) => setBranchDraft((current) => ({ ...current, phone: event.target.value }))}
-                />
-                <button type="submit">Add branch</button>
-              </form>
-            )}
-            {user.role === "HEADQUARTER_MANAGER" ? (
-              <ActionList
-                rows={data.branches.map((branch) => ({
-                  id: branch.id,
-                  title: branch.name,
-                  meta: `${branch.city}${branch.address ? ` · ${branch.address}` : ""}`,
-                  status: branch.phone ?? "No phone",
-                  actions: [{ label: "Delete", onClick: () => handleDeleteBranch(branch.id) }]
-                }))}
-              />
-            ) : (
-              <Table rows={data.branches} columns={["name", "city"]} />
-            )}
+          {staffTab === "branches" && canManageBranchAdmin && <Panel id="branches" title="Branch Management" icon={<Building2 />}>
+            <section className="branch-management">
+              <div className="branch-management-head">
+                <div>
+                  <p className="eyebrow">{canControlAllBranches ? "Head Office Administration" : "Assigned Branch"}</p>
+                  <h3>Multi-branch restaurant control</h3>
+                  <p>Monitor branch performance, staff coverage, reservations, orders, and revenue from one management screen.</p>
+                </div>
+                {canControlAllBranches && (
+                  <button className="gold-button" type="button" onClick={() => {
+                    cancelEditBranch();
+                    setTimeout(() => document.getElementById("branch-form")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+                  }}>
+                    <Building2 size={18} /> Add Branch
+                  </button>
+                )}
+              </div>
+
+              <div className="branch-toolbar">
+                <label className="search-field">
+                  <Search size={18} />
+                  <input
+                    aria-label="Search branches"
+                    placeholder="Search by branch, city, or manager"
+                    value={branchSearch}
+                    onChange={(event) => setBranchSearch(event.target.value)}
+                  />
+                </label>
+                <label className="filter-field">
+                  <Filter size={18} />
+                  <select
+                    aria-label="Filter branch status"
+                    value={branchStatusFilter}
+                    onChange={(event) => setBranchStatusFilter(event.target.value as "ALL" | BranchStatus)}
+                  >
+                    <option value="ALL">All statuses</option>
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                </label>
+              </div>
+
+              {(canControlAllBranches || editingBranchId) && (
+                <form id="branch-form" className={`branch-editor ${editingBranchId ? "editing" : ""}`} onSubmit={editingBranchId ? handleUpdateBranch : handleCreateBranch}>
+                  <div className="branch-editor-title">
+                    <div>
+                      <p className="eyebrow">{editingBranchId ? "Editing selected branch" : "New branch setup"}</p>
+                      <h3>{editingBranchId ? "Edit Branch Information" : "Create New Branch"}</h3>
+                    </div>
+                    {editingBranchId && <button type="button" onClick={cancelEditBranch}><X size={16} /> Cancel edit</button>}
+                  </div>
+                  <input
+                    aria-label="Branch name"
+                    placeholder="Branch name"
+                    value={branchDraft.name}
+                    onChange={(event) => setBranchDraft((current) => ({ ...current, name: event.target.value }))}
+                  />
+                  <input
+                    aria-label="City"
+                    placeholder="City"
+                    value={branchDraft.city}
+                    onChange={(event) => setBranchDraft((current) => ({ ...current, city: event.target.value }))}
+                  />
+                  <input
+                    aria-label="Address"
+                    placeholder="Address"
+                    value={branchDraft.address}
+                    onChange={(event) => setBranchDraft((current) => ({ ...current, address: event.target.value }))}
+                  />
+                  <input
+                    aria-label="Phone"
+                    placeholder="Phone"
+                    value={branchDraft.phone}
+                    onChange={(event) => setBranchDraft((current) => ({ ...current, phone: event.target.value }))}
+                  />
+                  <select
+                    aria-label="Branch status"
+                    value={branchDraft.status}
+                    disabled={!canControlAllBranches}
+                    onChange={(event) => setBranchDraft((current) => ({ ...current, status: event.target.value as BranchStatus }))}
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                  <button type="submit">{editingBranchId ? "Save Branch Changes" : "Create Branch"}</button>
+                </form>
+              )}
+
+              <div className="branch-admin-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Branch Name</th>
+                      <th>City</th>
+                      <th>Branch Manager</th>
+                      <th>Staff</th>
+                      <th>Orders</th>
+                      <th>Reservations</th>
+                      <th>Revenue</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredBranches.length === 0 ? (
+                      <tr><td colSpan={9}>No branches match this search.</td></tr>
+                    ) : filteredBranches.map((branch) => (
+                      <tr key={branch.id}>
+                        <td><strong>{branch.name}</strong><small>{branch.address ?? "No address saved"}</small></td>
+                        <td>{branch.city}</td>
+                        <td>{branch.manager?.name ?? "Unassigned"}</td>
+                        <td>{branch.staffCount ?? 0}</td>
+                        <td>{branch.totalOrders ?? 0}</td>
+                        <td>{branch.totalReservations ?? 0}</td>
+                        <td>£{Number(branch.revenue ?? 0).toFixed(2)}</td>
+                        <td><span className={`status-pill ${(branch.status ?? "ACTIVE").toLowerCase()}`}>{branch.status ?? "ACTIVE"}</span></td>
+                        <td>
+                          <div className="table-actions">
+                            <button type="button" title="View branch" onClick={() => loadBranchDetails(branch.id)}><Eye size={16} /></button>
+                            <button type="button" title="Edit branch" onClick={() => startEditBranch(branch)}><Edit3 size={16} /></button>
+                            {canControlAllBranches && <button type="button" title="Assign manager" onClick={() => {
+                              loadBranchDetails(branch.id);
+                              setTimeout(() => document.getElementById("manager-assignment")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+                            }}><UserPlus size={16} /></button>}
+                            {canControlAllBranches && <button className="danger" type="button" title="Delete branch" onClick={() => handleDeleteBranch(branch.id)}><Trash2 size={16} /></button>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {selectedBranchDetails && (
+                <section className="branch-details-page">
+                  <div className="branch-detail-header">
+                    <div>
+                      <p className="eyebrow">Branch Details</p>
+                      <h3>{selectedBranchDetails.name}</h3>
+                      <p>{selectedBranchDetails.address} · {selectedBranchDetails.phone}</p>
+                    </div>
+                    <span className={`status-pill ${(selectedBranchDetails.status ?? "ACTIVE").toLowerCase()}`}>{selectedBranchDetails.status ?? "ACTIVE"}</span>
+                  </div>
+
+                  <div className="branch-detail-metrics">
+                    <Metric label="Staff Members" value={selectedBranchDetails.staffCount ?? selectedBranchDetails.users?.length ?? 0} icon={<Users />} />
+                    <Metric label="Orders" value={selectedBranchDetails.totalOrders ?? 0} icon={<ClipboardList />} />
+                    <Metric label="Reservations" value={selectedBranchDetails.totalReservations ?? 0} icon={<CalendarDays />} />
+                    <Metric label="Revenue" value={`£${Number(selectedBranchDetails.revenue ?? 0).toFixed(2)}`} icon={<BarChart3 />} />
+                  </div>
+
+                  <div className="branch-detail-grid">
+                    <div>
+                      <h4>Assigned Manager</h4>
+                      <p className="detail-line">{selectedBranchDetails.manager?.name ?? "No manager assigned"}<span>{selectedBranchDetails.manager?.email ?? "Assign one below"}</span></p>
+                      {canControlAllBranches && (
+                        <div id="manager-assignment" className="manager-assignment">
+                          <select value={managerAssignment} onChange={(event) => setManagerAssignment(event.target.value)}>
+                            <option value="">Choose Branch Manager</option>
+                            {branchManagers.map((manager) => (
+                              <option key={manager.id} value={manager.id}>{manager.name} - {manager.email}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => handleAssignManager(selectedBranchDetails.id)}>Assign Manager</button>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h4>Revenue Summary</h4>
+                      <p className="detail-line">Total revenue<span>£{Number(selectedBranchDetails.revenue ?? 0).toFixed(2)}</span></p>
+                      <p className="detail-line">Average order value<span>£{((Number(selectedBranchDetails.revenue ?? 0)) / Math.max(1, selectedBranchDetails.totalOrders ?? 0)).toFixed(2)}</span></p>
+                    </div>
+                    <div>
+                      <h4>Staff List</h4>
+                      <Table rows={(selectedBranchDetails.users ?? []).map((account) => ({ name: account.name, role: roleLabels[account.role], email: account.email }))} columns={["name", "role", "email"]} />
+                    </div>
+                    <div>
+                      <h4>Recent Orders</h4>
+                      <Table rows={(selectedBranchDetails.orders ?? []).map((order) => ({ customer: order.customerName ?? "Walk-in", items: formatOrderItems(order), status: order.status, total: `£${Number(order.total).toFixed(2)}` }))} columns={["customer", "items", "status", "total"]} />
+                    </div>
+                    <div>
+                      <h4>Recent Reservations</h4>
+                      <Table rows={(selectedBranchDetails.bookings ?? []).map((booking) => ({ customer: booking.customerName ?? "Customer", date: formatBookingDate(booking.reservationAt), guests: booking.guests, status: booking.status }))} columns={["customer", "date", "guests", "status"]} />
+                    </div>
+                    <div>
+                      <h4>Performance Statistics</h4>
+                      <Table rows={[
+                        { metric: "Orders", value: selectedBranchDetails.totalOrders ?? 0 },
+                        { metric: "Reservations", value: selectedBranchDetails.totalReservations ?? 0 },
+                        { metric: "Staff members", value: selectedBranchDetails.staffCount ?? 0 },
+                        { metric: "Revenue", value: `£${Number(selectedBranchDetails.revenue ?? 0).toFixed(2)}` }
+                      ]} columns={["metric", "value"]} />
+                    </div>
+                  </div>
+                </section>
+              )}
+            </section>
           </Panel>}
           {staffTab === "users" && canSeeUsers(user.role) && (
             <Panel id="users" title="Users & Roles" icon={<Users />}>
-              {(user.role === "BRANCH_MANAGER" || user.role === "HEADQUARTER_MANAGER") && (
-                <form className="branch-admin-form" onSubmit={handleCreateStaff}>
-                  <input
-                    aria-label="Staff full name"
-                    placeholder="Full name"
-                    value={staffDraft.name}
-                    onChange={(event) => setStaffDraft((current) => ({ ...current, name: event.target.value }))}
-                  />
-                  <input
-                    aria-label="Staff email"
-                    placeholder="Email"
-                    value={staffDraft.email}
-                    onChange={(event) => setStaffDraft((current) => ({ ...current, email: event.target.value.trim() }))}
-                  />
-                  <select
-                    aria-label="Staff role"
-                    value={staffDraft.role}
-                    onChange={(event) => setStaffDraft((current) => ({ ...current, role: event.target.value as Role }))}
-                  >
-                    {user.role === "HEADQUARTER_MANAGER" && <option value="BRANCH_MANAGER">Branch Manager</option>}
-                    <option value="WAITER">Waiter</option>
-                    <option value="CHEF">Chef</option>
-                    {user.role === "HEADQUARTER_MANAGER" && <option value="CASHIER">Cashier</option>}
-                  </select>
-                  {user.role === "HEADQUARTER_MANAGER" && (
-                    <select
-                      aria-label="Staff branch"
-                      value={staffDraft.branchId}
-                      onChange={(event) => setStaffDraft((current) => ({ ...current, branchId: event.target.value }))}
-                    >
-                      <option value="">Choose branch</option>
-                      {data.branches.map((branch) => (
-                        <option key={branch.id} value={branch.id}>{branch.name} - {branch.city}</option>
-                      ))}
-                    </select>
+              <form className="branch-editor user-editor" onSubmit={handleSaveStaff}>
+                <div className="branch-editor-title">
+                  <div>
+                    <p className="eyebrow">{editingUserId ? "Edit account" : "Create account"}</p>
+                    <h3>{editingUserId ? "Update user access" : "Add a new user"}</h3>
+                  </div>
+                  {editingUserId && (
+                    <button type="button" onClick={() => resetStaffDraft()}>
+                      <X size={16} />
+                      Cancel edit
+                    </button>
                   )}
-                  <input
-                    aria-label="Staff password"
-                    type="password"
-                    value={staffDraft.password}
-                    onChange={(event) => setStaffDraft((current) => ({ ...current, password: event.target.value }))}
-                  />
-                  <button type="submit">Add staff</button>
-                </form>
-              )}
-              <Table rows={data.users.map((account) => ({ name: account.name, role: roleLabels[account.role], branch: account.branch?.name ?? "Global" }))} columns={["name", "role", "branch"]} />
+                </div>
+                <input
+                  aria-label="User full name"
+                  placeholder="Full name"
+                  value={staffDraft.name}
+                  onChange={(event) => setStaffDraft((current) => ({ ...current, name: event.target.value }))}
+                />
+                <input
+                  aria-label="User email"
+                  placeholder="Email"
+                  value={staffDraft.email}
+                  onChange={(event) => setStaffDraft((current) => ({ ...current, email: event.target.value.trim() }))}
+                />
+                <select
+                  aria-label="User role"
+                  value={staffDraft.role}
+                  onChange={(event) => setStaffDraft((current) => ({ ...current, role: event.target.value as Role }))}
+                >
+                  {editableUserRoles(user.role).map((role) => (
+                    <option key={role} value={role}>{roleLabels[role]}</option>
+                  ))}
+                </select>
+                {user.role !== "BRANCH_MANAGER" && (
+                  <select
+                    aria-label="User branch"
+                    value={staffDraft.branchId}
+                    onChange={(event) => setStaffDraft((current) => ({ ...current, branchId: event.target.value }))}
+                  >
+                    <option value="">Global / no branch</option>
+                    {data.branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>{branch.name} - {branch.city}</option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  aria-label="User password"
+                  type="password"
+                  placeholder={editingUserId ? "Leave blank to keep password" : "Password"}
+                  value={staffDraft.password}
+                  onChange={(event) => setStaffDraft((current) => ({ ...current, password: event.target.value }))}
+                />
+                <button type="submit">{editingUserId ? "Save user changes" : "Add user"}</button>
+              </form>
+
+              <div className="branch-admin-table users-admin-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Branch</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.users.map((account) => {
+                      const canManage = canEditAccount(user, account);
+                      return (
+                        <tr key={account.id}>
+                          <td><strong>{account.name}</strong></td>
+                          <td>{account.email}</td>
+                          <td>{roleLabels[account.role]}</td>
+                          <td>{account.branch?.name ?? "Global"}</td>
+                          <td>
+                            <div className="table-actions">
+                              <button type="button" disabled={!canManage} onClick={() => startEditUser(account)} title={canManage ? "Edit user" : "Cannot edit this account"}>
+                                <Edit3 size={15} />
+                              </button>
+                              <button type="button" className="danger" disabled={!canManage} onClick={() => handleDeleteUser(account.id, account.name)} title={canManage ? "Delete user" : "Cannot delete this account"}>
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </Panel>
           )}
         </section>
@@ -1259,6 +1645,31 @@ function canSeeBookings(role?: Role) {
 
 function canSeeUsers(role?: Role) {
   return role === "ADMIN" || role === "HEADQUARTER_MANAGER" || role === "BRANCH_MANAGER";
+}
+
+function editableUserRoles(role?: Role): Role[] {
+  if (role === "ADMIN") {
+    return ["ADMIN", "HEADQUARTER_MANAGER", "BRANCH_MANAGER", "CHEF", "WAITER", "CASHIER", "CUSTOMER"];
+  }
+  if (role === "HEADQUARTER_MANAGER") {
+    return ["BRANCH_MANAGER", "CHEF", "WAITER", "CASHIER"];
+  }
+  if (role === "BRANCH_MANAGER") {
+    return ["CHEF", "WAITER"];
+  }
+  return [];
+}
+
+function canEditAccount(currentUser: SessionUser | null, account: UserRecord) {
+  if (!currentUser || currentUser.id === account.id) return false;
+  if (currentUser.role === "ADMIN") return true;
+  if (currentUser.role === "HEADQUARTER_MANAGER") {
+    return ["BRANCH_MANAGER", "CHEF", "WAITER", "CASHIER"].includes(account.role);
+  }
+  if (currentUser.role === "BRANCH_MANAGER") {
+    return account.branchId === currentUser.branchId && ["CHEF", "WAITER"].includes(account.role);
+  }
+  return false;
 }
 
 function formatBookingDate(value: string) {

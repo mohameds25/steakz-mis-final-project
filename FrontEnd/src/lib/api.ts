@@ -20,6 +20,11 @@ const apiUrl =
       ? sameHostApiUrl
       : productionApiUrl;
 
+async function requestError(response: Response, fallback: string) {
+  const body = await response.json().catch(() => null);
+  return new Error(body?.message || fallback);
+}
+
 export async function login(email: string, password: string) {
   const response = await fetch(`${apiUrl}/api/auth/login`, {
     method: "POST",
@@ -27,8 +32,7 @@ export async function login(email: string, password: string) {
     body: JSON.stringify({ email, password })
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.message || "Login failed");
+    throw await requestError(response, "Login failed");
   }
   return response.json() as Promise<{ token: string; user: SessionUser }>;
 }
@@ -40,7 +44,7 @@ export async function registerCustomer(name: string, email: string, password: st
     body: JSON.stringify({ name, email, password })
   });
   if (!response.ok) {
-    throw new Error("Registration failed");
+    throw await requestError(response, "Registration failed");
   }
   return response.json() as Promise<{ token: string; user: SessionUser }>;
 }
@@ -50,7 +54,7 @@ export async function getResource<T>(path: string, token: string): Promise<T> {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (!response.ok) {
-    throw new Error(`Request failed: ${path}`);
+    throw await requestError(response, `Request failed: ${path}`);
   }
   return response.json() as Promise<T>;
 }
@@ -62,7 +66,7 @@ export async function postResource<T>(path: string, token: string, body: unknown
     body: JSON.stringify(body)
   });
   if (!response.ok) {
-    throw new Error(`Request failed: ${path}`);
+    throw await requestError(response, `Request failed: ${path}`);
   }
   return response.json() as Promise<T>;
 }
@@ -74,7 +78,7 @@ export async function putResource<T>(path: string, token: string, body: unknown)
     body: JSON.stringify(body)
   });
   if (!response.ok) {
-    throw new Error(`Request failed: ${path}`);
+    throw await requestError(response, `Request failed: ${path}`);
   }
   return response.json() as Promise<T>;
 }
@@ -85,6 +89,6 @@ export async function deleteResource(path: string, token: string): Promise<void>
     headers: { Authorization: `Bearer ${token}` }
   });
   if (!response.ok) {
-    throw new Error(`Request failed: ${path}`);
+    throw await requestError(response, `Request failed: ${path}`);
   }
 }
