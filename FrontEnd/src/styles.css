@@ -921,6 +921,11 @@ button {
   grid-template-columns: minmax(300px, 0.9fr) minmax(320px, 1.1fr);
 }
 
+.customer-grid #welcome {
+  order: 0;
+  grid-column: 1 / -1;
+}
+
 .customer-grid #booking {
   order: 1;
   grid-column: 1 / -1;
@@ -1077,6 +1082,148 @@ button {
 .customer-menu {
   display: grid;
   gap: 12px;
+}
+
+.customer-welcome {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  align-items: end;
+}
+
+.customer-welcome h2 {
+  margin: 4px 0 10px;
+  color: #17201b;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 4vw, 3.8rem);
+  line-height: 1;
+}
+
+.customer-welcome p:not(.eyebrow) {
+  max-width: 680px;
+  margin: 0;
+  color: #4d554f;
+  line-height: 1.6;
+}
+
+.welcome-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.welcome-summary span {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #dfd8ca;
+  border-radius: 8px;
+  padding: 12px;
+  color: #60665f;
+  background: #fffdf7;
+  font-weight: 800;
+}
+
+.welcome-summary strong {
+  color: #8a2d23;
+  font-size: 1.2rem;
+}
+
+.welcome-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.welcome-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.receipt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.receipt-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dfd8ca;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fffdf7;
+  box-shadow: 0 12px 30px rgba(23, 32, 27, 0.08);
+}
+
+.receipt-head,
+.receipt-total,
+.receipt-lines span,
+.receipt-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.receipt-head {
+  align-items: flex-start;
+  border-bottom: 1px dashed #cfc5b4;
+  padding-bottom: 12px;
+}
+
+.receipt-head span {
+  display: grid;
+  gap: 2px;
+}
+
+.receipt-head small,
+.receipt-meta span {
+  color: #60665f;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.receipt-head strong {
+  color: #17201b;
+  font-size: 1.25rem;
+}
+
+.receipt-head b {
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #1c5b37;
+  background: #e4f5e8;
+  font-size: 0.72rem;
+}
+
+.receipt-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.receipt-meta strong {
+  text-align: right;
+}
+
+.receipt-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.receipt-lines span {
+  border-bottom: 1px solid #eee5d7;
+  padding-bottom: 8px;
+}
+
+.receipt-total {
+  align-items: center;
+  border-top: 2px solid #17201b;
+  padding-top: 12px;
+}
+
+.receipt-total strong {
+  color: #8a2d23;
+  font-size: 1.45rem;
 }
 
 .branch-management {

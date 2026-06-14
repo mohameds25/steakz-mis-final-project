@@ -1,4 +1,4 @@
-import { BarChart3, Building2, CalendarClock, CalendarDays, ClipboardList, Edit3, Eye, Filter, LogOut, MapPin, Search, Shield, ShoppingBag, Trash2, UserPlus, Utensils, Users, X } from "lucide-react";
+import { BarChart3, Building2, CalendarClock, CalendarDays, ClipboardList, Edit3, Eye, Filter, LogOut, MapPin, ReceiptText, Search, Shield, ShoppingBag, Trash2, UserPlus, Utensils, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { deleteResource, getResource, login, postResource, putResource, registerCustomer, Role, SessionUser } from "./lib/api";
 
@@ -29,8 +29,8 @@ type BranchDetails = Branch & {
   sales: Sale[];
 };
 type PublicTab = "home" | "book" | "menu" | "branches" | "login";
-type CustomerTab = "booking" | "menu" | "order" | "bookings" | "orders" | "branches";
-type StaffTab = "overview" | "reports" | "orders" | "reservations" | "sales" | "shifts" | "branches" | "users";
+type CustomerTab = "welcome" | "booking" | "menu" | "order" | "bookings" | "orders" | "branches";
+type StaffTab = "overview" | "reports" | "orders" | "receipts" | "reservations" | "sales" | "shifts" | "branches" | "users";
 type Cart = Record<string, number>;
 
 const roleLabels: Record<Role, string> = {
@@ -125,7 +125,7 @@ const roleProfiles: Record<Exclude<Role, "CUSTOMER">, { title: string; descripti
 
 export function App() {
   const [publicTab, setPublicTab] = useState<PublicTab>("home");
-  const [customerTab, setCustomerTab] = useState<CustomerTab>("booking");
+  const [customerTab, setCustomerTab] = useState<CustomerTab>("welcome");
   const [staffTab, setStaffTab] = useState<StaffTab>("overview");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
@@ -177,6 +177,9 @@ export function App() {
       const session = await login(email, password);
       setToken(session.token);
       setUser(session.user);
+      if (session.user.role === "CUSTOMER") {
+        setCustomerTab("welcome");
+      }
       localStorage.setItem("steakzPendingBranch", selectedPublicBranch.name);
       localStorage.setItem("steakzToken", session.token);
       localStorage.setItem("steakzUser", JSON.stringify(session.user));
@@ -192,6 +195,7 @@ export function App() {
       const session = await registerCustomer(name, email, password);
       setToken(session.token);
       setUser(session.user);
+      setCustomerTab("welcome");
       localStorage.setItem("steakzPendingBranch", selectedPublicBranch.name);
       localStorage.setItem("steakzToken", session.token);
       localStorage.setItem("steakzUser", JSON.stringify(session.user));
@@ -680,6 +684,7 @@ export function App() {
     return matchesSearch && matchesStatus;
   });
   const customerTabs: Array<{ id: CustomerTab; label: string; icon: React.ReactNode }> = [
+    { id: "welcome", label: "Welcome", icon: <Shield size={18} /> },
     { id: "booking", label: "Book Table", icon: <CalendarDays size={18} /> },
     { id: "menu", label: "Menu", icon: <Utensils size={18} /> },
     { id: "order", label: "Order", icon: <ShoppingBag size={18} /> },
@@ -691,6 +696,7 @@ export function App() {
     { id: "overview", label: "Overview", icon: <BarChart3 size={18} /> },
     { id: "reports", label: "Reports", icon: <BarChart3 size={18} />, visible: user?.role === "ADMIN" || user?.role === "HEADQUARTER_MANAGER" },
     { id: "orders", label: "Orders", icon: <ClipboardList size={18} /> },
+    { id: "receipts", label: "Receipts", icon: <ReceiptText size={18} />, visible: user?.role === "WAITER" },
     { id: "reservations", label: "Reservations", icon: <CalendarDays size={18} />, visible: canSeeBookings(user?.role) },
     { id: "sales", label: "Sales", icon: <BarChart3 size={18} />, visible: canSeeSales(user?.role) },
     { id: "shifts", label: "Shifts", icon: <CalendarClock size={18} />, visible: canSeeShifts(user?.role) },
@@ -996,6 +1002,35 @@ export function App() {
           </section>
 
           <section className="content-grid customer-grid">
+            {customerTab === "welcome" && <Panel id="welcome" title="Welcome" icon={<Shield />}>
+              <section className="customer-welcome">
+                <div>
+                  <p className="eyebrow">Steakz guest portal</p>
+                  <h2>Welcome back, {user.name}</h2>
+                  <p>Your table booking, branch choice, menu cart, and order history are ready in one place.</p>
+                </div>
+                <div className="welcome-summary">
+                  <span>
+                    <strong>{selectedCustomerBranch?.name ?? data.branches[0]?.name ?? "Choose a branch"}</strong>
+                    Preferred branch
+                  </span>
+                  <span>
+                    <strong>{data.bookings.length}</strong>
+                    Active booking requests
+                  </span>
+                  <span>
+                    <strong>£{customerOrderTotal.toFixed(2)}</strong>
+                    Current cart total
+                  </span>
+                </div>
+                <div className="welcome-actions">
+                  <button type="button" onClick={() => setCustomerTab("booking")}>Book a table</button>
+                  <button type="button" onClick={() => setCustomerTab("menu")}>View menu</button>
+                  <button type="button" onClick={() => setCustomerTab("orders")}>My orders</button>
+                </div>
+              </section>
+            </Panel>}
+
             {customerTab === "menu" && <Panel id="menu" title="Step 2 - Select Dishes" icon={<Utensils />}>
               <div className="customer-menu">
                 {menuHighlights.map((item) => (
@@ -1287,6 +1322,48 @@ export function App() {
               />
             )}
           </Panel>}
+          {staffTab === "receipts" && user.role === "WAITER" && (
+            <Panel id="receipts" title="Customer Receipts" icon={<ReceiptText />}>
+              <section className="receipt-grid">
+                {data.orders.length === 0 ? (
+                  <p className="empty-state">No customer receipts for this branch yet.</p>
+                ) : data.orders.map((order) => (
+                  <article className="receipt-card" key={order.id}>
+                    <div className="receipt-head">
+                      <span>
+                        <small>Receipt</small>
+                        <strong>#{order.id.slice(-6).toUpperCase()}</strong>
+                      </span>
+                      <b>{order.status}</b>
+                    </div>
+                    <div className="receipt-meta">
+                      <span>Customer</span>
+                      <strong>{receiptCustomerName(order)}</strong>
+                      <span>Branch</span>
+                      <strong>{order.branch?.name ?? user.branchName}</strong>
+                      <span>Date</span>
+                      <strong>{formatOrderDate(order.createdAt)}</strong>
+                    </div>
+                    <div className="receipt-lines">
+                      {(order.items && order.items.length > 0 ? order.items : [{ name: order.customerName ?? "Order", quantity: 1, unitPrice: order.total }]).map((item, index) => (
+                        <span key={`${order.id}-${item.name}-${index}`}>
+                          {item.quantity}x {item.name}
+                          <b>£{Number(item.lineTotal ?? Number(item.unitPrice ?? 0) * item.quantity).toFixed(2)}</b>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="receipt-total">
+                      <span>Total paid</span>
+                      <strong>£{Number(order.total).toFixed(2)}</strong>
+                    </div>
+                    {order.status === "READY" && (
+                      <button type="button" onClick={() => handleOrderStatus(order.id, "SERVED")}>Mark served</button>
+                    )}
+                  </article>
+                ))}
+              </section>
+            </Panel>
+          )}
           {staffTab === "reservations" && canSeeBookings(user.role) && (
             <Panel id="reservations" title="Reservations" icon={<CalendarDays />}>
               {user.role === "WAITER" ? (
@@ -1670,6 +1747,18 @@ function canEditAccount(currentUser: SessionUser | null, account: UserRecord) {
     return account.branchId === currentUser.branchId && ["CHEF", "WAITER"].includes(account.role);
   }
   return false;
+}
+
+function receiptCustomerName(order: Order) {
+  return (order.customerName || "Guest").split(" - ")[0];
+}
+
+function formatOrderDate(value?: string) {
+  if (!value) return "Today";
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
 
 function formatBookingDate(value: string) {
